@@ -1,0 +1,26 @@
+# Training of (intersectionally) fair classifiers -- experiment_train.py
+# Defaults correspond to the setting in the paper (Sec. 4.2).
+
+seed: 0               # seed for subsampling the data (data is split 50/50 into train/test)
+# <predictor>[_<measure>[_<subgroups>]], see README. E.g.:
+#   linear              linear classifier, no fairness constraints
+#   linear_fpsf_rule    FPSF constraints, violating conjunction subgroups found by maximizing FPSF
+#   linear_msd0_rule    FPSF constraints, violating conjunction subgroups found by maximizing SD on negative samples
+#   linear_fpsf_linear  same as above, with linear subgroups
+#   dnf_fpsf_rule       DNF classifier (n_terms terms)
+#   gerry_fpsf          GerryFair baseline
+model: linear_fpsf_rule
+scenario: ACSIncome   # ACSIncome, ACSPublicCoverage, ACSMobility, ACSEmployment, ACSTravelTime
+max_samples: 10000    # number of training samples (the same number of test samples is drawn)
+time_limit: 14400     # [s] solver time limit (GerryFair: number of iterations = time_limit / 5)
+gamma: 0.01           # fairness threshold (halved for ACSMobility, multiplied by 4 for MSD)
+sparsity_term: 0      # weight of the sparsity penalty for linear classifiers (0.1 for the sparse models)
+n_terms: 5            # number of terms of DNF classifiers (1 and 3 in the paper)
+gerry_wall_clock_limit: false  # if true, GerryFair training is also stopped after time_limit seconds
+
+hydra:
+  sweeper:
+    params:
+      seed: 0, 1, 2, 3, 4
+      model: linear, linear_fpsf_rule, linear_msd0_rule, linear_fpsf_linear, linear_msd0_linear, gerry_fpsf
+      scenario: ACSIncome, ACSPublicCoverage, ACSMobility, ACSEmployment, ACSTravelTime

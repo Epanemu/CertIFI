@@ -1,0 +1,29 @@
+# Ablation: linear classifier with ALL conjunction subgroups added as constraints upfront
+# (instead of lazily generated cuts). Defaults correspond to the setting used for the ablation.
+
+seed: 0
+# bias_type: one of "msd", "msd0", "spsf", "fpsf", or "" for no fairness constraint at all
+bias_type: fpsf
+time_limit: 14400
+scenario: ACSIncome
+gamma: 0.01
+max_samples: 10000
+sparsity_term: 0
+
+# Rule-subgroup enumeration controls (see LinearFairClassifierFullRules docstring):
+# n_min_group=1 is exact/exhaustive (every non-empty conjunction); raise it to prune rare
+# subgroups if enumeration blows up for a given scenario's protected dimensionality.
+n_min_group: 1
+# Fail fast instead of hanging/OOMing if enumeration would exceed this many subgroups.
+# null = no limit.
+max_subgroups: null
+
+# "gurobi", or e.g. "appsi_highs" (open-source alternative)
+solver_name: gurobi
+
+hydra:
+  sweeper:
+    params:
+      seed: 0, 1, 2, 3, 4
+      bias_type: msd0, fpsf
+      scenario: ACSIncome, ACSPublicCoverage, ACSMobility, ACSEmployment, ACSTravelTime

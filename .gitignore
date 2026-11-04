@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data downloaded by folktables
+data/
+
+# Hydra / experiment outputs
+outputs/
+multirun/
+batch_out/
+batch_from_cluster/
+plots/
+*.png
+*.pdf
+
+# Local working material not part of the release
+NeurIPS_rebuttal/
+bias_analysis/
+.claude/
+paper.pdf
+
+# Legacy / superseded scripts
+bias_detect_cluster.py
+msd.py
+spsf_mio.py
+NN_fair_classifier.py
+NN_plot.py
+eval_plot.py
+train_plot.py
+plot_gap.py
+parse_eval.py

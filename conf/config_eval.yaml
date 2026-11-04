@@ -1,0 +1,22 @@
+# Detection of the most biased subgroup in data -- experiment_eval.py
+# Defaults correspond to the setting in the paper (Sec. 4.1).
+
+seed: 0                 # seed for subsampling the data
+# mio_<objective>_<subgroups> or gerry_spsf
+#   objective: spsf (SPSF) or msd (Subgroup Discrepancy, i.e., MSD for conjunction subgroups)
+#   subgroups: rule (conjunctions of protected attribute values) or linear (linear threshold functions)
+method: mio_msd_rule
+scenario: ACSIncome     # ACSIncome, ACSPublicCoverage, ACSMobility, ACSEmployment, ACSTravelTime
+max_samples: 50000      # number of samples used for the detection
+time_limit: 10000       # [s] solver time limit (300 and 600 in Appendix C.1)
+solver: gurobi          # gurobi or highs (open-source alternative)
+warmstart: true         # warm start linear subgroups (from GerryFair if usable, else logistic regression)
+skip_gerry_init: false
+n_min: 0                # minimal number of samples in a subgroup
+
+hydra:
+  sweeper:
+    params:
+      seed: 0, 1, 2, 3, 4
+      method: gerry_spsf, mio_spsf_linear, mio_msd_linear, mio_spsf_rule, mio_msd_rule
+      scenario: ACSIncome, ACSPublicCoverage, ACSMobility, ACSEmployment, ACSTravelTime

@@ -1,0 +1,8 @@
+# @package _global_
+# Same as cluster_batch_train, but runs are distinguished by the number of DNF terms
+# (directory layout expected by plotting/final_train_plot_dnfs.py)
+
+hydra:
+  sweep:
+    dir: batch_out/train/${hydra.job.name}/${model}-${scenario}-${n_terms}
+    subdir: ${seed}

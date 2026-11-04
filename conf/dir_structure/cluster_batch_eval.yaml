@@ -1,0 +1,6 @@
+# @package _global_
+
+hydra:
+  sweep:
+    dir: batch_out/eval/${hydra.job.name}/${method}-${scenario}
+    subdir: ${seed}
