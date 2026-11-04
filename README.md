@@ -33,10 +33,15 @@ of sex, race and age group.
 ## Installation
 
 ```bash
-pip install "certifi-learn[gurobi] @ git+https://github.com/Epanemu/CertIFI"
+pip install "certifi-learn[gurobi]"
 ```
 
-Building from source requires a [Rust toolchain](https://rustup.rs/).
+Prebuilt wheels are available for Linux, macOS and Windows (Python 3.9+). To install
+the latest version from GitHub instead, you need a [Rust toolchain](https://rustup.rs/):
+
+```bash
+pip install "certifi-learn[gurobi] @ git+https://github.com/Epanemu/CertIFI"
+```
 
 Optional dependencies (extras):
 
@@ -150,7 +155,7 @@ It finds the most biased subgroup in the data, trains an unconstrained and a fai
 linear model, and audits both on test data:
 
 ```bash
-pip install "certifi-learn[gurobi,examples] @ git+https://github.com/Epanemu/CertIFI"
+pip install "certifi-learn[gurobi,examples]"
 python examples/detect_and_train.py
 ```
 
