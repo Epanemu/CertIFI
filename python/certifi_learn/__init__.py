@@ -7,11 +7,16 @@
 * :mod:`certifi_learn.measures` -- evaluation of the bias measures for a given subgroup.
 """
 
+from importlib.metadata import PackageNotFoundError, version as _version
+
 from . import exact, measures
 from .classifiers import FairDNFClassifier, FairLinearClassifier
 from .detection import DetectedSubgroup, find_subgroup
 
-__version__ = "0.2.0"
+try:
+    __version__ = _version("certifi-learn")
+except PackageNotFoundError:  # not installed (e.g. running from a source checkout)
+    __version__ = "unknown"
 
 __all__ = [
     "find_subgroup",

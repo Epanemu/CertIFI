@@ -1,5 +1,10 @@
 # CertIFI: Certifiably Intersectionally Fair & Interpretable models
 
+[![PyPI](https://img.shields.io/pypi/v/certifi-learn)](https://pypi.org/project/certifi-learn/)
+[![Python](https://img.shields.io/pypi/pyversions/certifi-learn)](https://pypi.org/project/certifi-learn/)
+[![Wheels](https://github.com/Epanemu/CertIFI/actions/workflows/wheels.yml/badge.svg)](https://github.com/Epanemu/CertIFI/actions/workflows/wheels.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/Epanemu/CertIFI/blob/main/LICENSE)
+
 `certifi-learn` finds the **most biased subgroup** in data or in a model's predictions,
 and trains **interpretable classifiers** (linear models and rule sets) that are
 **certifiably fair** on all intersectional subgroups, for example all combinations
@@ -144,12 +149,12 @@ For a classifier h and a subgroup S:
 `certifi_learn.measures` evaluates these for a given subgroup mask.
 `certifi_learn.exact` exposes the Rust search directly (`msd`, `spsf`, `fpsf`), with
 options such as sample weights, negated literals and grouped one-hot columns. See
-[`docs/subgroup_pruning_proof.tex`](docs/subgroup_pruning_proof.tex) for the
+[`docs/subgroup_pruning_proof.tex`](https://github.com/Epanemu/CertIFI/blob/main/docs/subgroup_pruning_proof.tex) for the
 algorithm and its proof of correctness.
 
 ## Example
 
-[`examples/detect_and_train.py`](examples/detect_and_train.py) runs end to end on
+[`examples/detect_and_train.py`](https://github.com/Epanemu/CertIFI/blob/main/examples/detect_and_train.py) runs end to end on
 the US Census data (ACS Income, via [folktables](https://github.com/socialfoundations/folktables)).
 It finds the most biased subgroup in the data, trains an unconstrained and a fair
 linear model, and audits both on test data:
@@ -182,4 +187,4 @@ Tests that need HiGHS or a Gurobi license are skipped if those are not available
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Epanemu/CertIFI/blob/main/LICENSE)
