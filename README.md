@@ -98,7 +98,7 @@ rules = FairDNFClassifier(n_terms=3, gamma=0.01, measure="fpsf").fit(X, y, X_pro
 print(rules.describe())
 ```
 
-Main parameters:
+Common parameters:
 
 | Parameter | Values |
 |---|---|
@@ -107,8 +107,14 @@ Main parameters:
 | `subgroup_negations` | Also allow negated literals in conjunction subgroups (e.g. `RAC1P != White`), which constrains a larger set of subgroups. Default `False`. |
 | `gamma` | Fairness threshold. Every subgroup must have bias ≤ γ on the training data. |
 | `detection_backend` | `"exact"` (default) or `"mio"`, for finding violating conjunction subgroups. Linear subgroups always use MIO. |
-| `sparsity` | (linear only) Penalty on the proportion of non-zero coefficients |
 | `time_limit` | Solver time limit in seconds. The best solution found so far is returned. |
+
+Model-specific parameters:
+
+| Model | Parameter | Values |
+|---|---|---|
+| `FairLinearClassifier` | `sparsity` | Weight of the penalty on the proportion of non-zero coefficients (default 0) |
+| `FairDNFClassifier` | `n_terms` | Number of terms (rules) of the DNF (default 3) |
 
 γ-fairness is guaranteed on the training data. On new data, the bias can be
 somewhat higher. Audit your model on held-out data with `find_subgroup`.
@@ -121,7 +127,7 @@ For a classifier h and a subgroup S:
 |---|---|
 | SPSF | P(S) · \|P(h=1) − P(h=1 \| S)\| |
 | FPSF | P(S, y=0) · \|P(h=1 \| y=0) − P(h=1 \| S, y=0)\| |
-| SD / MSD | \|P(S \| y=1) − P(S \| y=0)\|, i.e. how differently S is represented among positive and negative samples. Maximized over conjunctions, this is the Maximum Subgroup Discrepancy. |
+| SD / MSD | \|P(S \| y=1) − P(S \| y=0)\|, i.e. how differently S is represented among positive and negative samples. Maximized over conjunctions, this is the [Maximum Subgroup Discrepancy](https://github.com/Epanemu/MSD). |
 
 `certifi_learn.measures` evaluates these for a given subgroup mask.
 `certifi_learn.exact` exposes the Rust search directly (`msd`, `spsf`, `fpsf`), with
@@ -156,7 +162,6 @@ Tests that need HiGHS or a Gurobi license are skipped if those are not available
 @inproceedings{nemecek2026intersectional,
  author = {N\v{e}me\v{c}ek, Ji\v{r}\'{\i} and Kozdoba, Mark and Kryvoviaz, Illia and Pevn\'{y}, Tom\'{a}\v{s} and Mare\v{c}ek, Jakub},
  booktitle = {Advances in Neural Information Processing Systems},
- publisher = {Curran Associates, Inc.},
  title = {Intersectional Fairness via Mixed-Integer Optimization},
  volume = {39, Main Conference},
  year = {2026}
