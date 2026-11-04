@@ -209,8 +209,7 @@ class DNFFairClassifier:
                 gamma = self._gamma / mask.mean() # SPSF(on y=0) * n_0 / n is FPSF - we divide the gamma by the factor
                 group_def = mio.find_subgroup(self.X_prot[mask], y_hat[mask], verbose=False, bias_type="spsf", group_type=self.subgroup_type, gamma=gamma)
             else:
-                gamma = self._gamma / (y_hat[mask].mean() * (~y_hat[mask]).mean()) # SPSF = p1 * p0 * MSD, thus we divide by both ps
-                group_def = mio.find_subgroup(self.X_prot[mask], y_hat[mask], verbose=self.verbose, bias_type="msd", group_type=self.subgroup_type, gamma=gamma)
+                group_def = mio.find_subgroup(self.X_prot[mask], y_hat[mask], verbose=self.verbose, bias_type="msd", group_type=self.subgroup_type)
 
             if group_def is None:
                 logger.info("Did NOT find a SUBGROUP.")

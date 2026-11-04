@@ -38,6 +38,7 @@ class DetectedSubgroup:
     optimal: bool  # True if proven to be the most biased subgroup
     backend: str
     literals: list[int] | None = None  # conjunction: indices of columns that must be 1
+    negated_literals: list[int] | None = None  # conjunction: indices of columns that must be 0
     coef: np.ndarray | None = None  # linear: X @ coef >= threshold
     threshold: float | None = None
 
@@ -49,16 +50,19 @@ class DetectedSubgroup:
             mask = np.ones(X.shape[0], dtype=bool)
             for j in self.literals:
                 mask &= Xb[:, j]
+            for j in self.negated_literals or []:
+                mask &= ~Xb[:, j]
             return mask
         return X @ self.coef >= self.threshold
 
     def describe(self, feature_names=None) -> str:
         """Human-readable description of the subgroup."""
         if self.kind == "conjunction":
-            if not self.literals:
-                return "(all samples)"
-            names = [str(feature_names[j]) if feature_names is not None else f"x{j}" for j in self.literals]
-            return " AND ".join(names)
+            def name(j):
+                return str(feature_names[j]) if feature_names is not None else f"x{j}"
+
+            parts = [name(j) for j in self.literals] + [f"NOT {name(j)}" for j in self.negated_literals or []]
+            return " AND ".join(parts) if parts else "(all samples)"
         terms = []
         for j, c in enumerate(self.coef):
             if c != 0:
@@ -76,6 +80,7 @@ def find_subgroup(
     subgroups: str = "conjunction",
     backend: str = "auto",
     time_limit: float = 300,
+    negations: bool = False,
     n_min: int = 0,
     gamma: float | None = None,
     solver: str = "gurobi",
@@ -97,6 +102,7 @@ def find_subgroup(
         subgroups: "conjunction" or "linear".
         backend: "exact", "mio", or "auto" (exact for conjunctions, MIO for linear).
         time_limit: time limit of the search in seconds.
+        negations: also allow negated literals in conjunctions (e.g. ``NOT race = White``).
         n_min: minimal number of samples in the subgroup.
         gamma: if given, only a subgroup with violation above gamma is returned,
             otherwise None (useful for checking gamma-fairness).
@@ -119,6 +125,8 @@ def find_subgroup(
         raise ValueError("Linear subgroups are supported only by the 'mio' backend")
     if measure == "fpsf" and y_true is None:
         raise ValueError("measure='fpsf' requires y_true")
+    if negations and subgroups != "conjunction":
+        raise ValueError("negations are supported only for conjunction subgroups")
 
     X = np.asarray(X)
     y = np.asarray(y).astype(bool)
@@ -126,6 +134,10 @@ def find_subgroup(
         y_true = np.asarray(y_true).astype(bool)
     group_type = "rule" if subgroups == "conjunction" else "linear"
     X_search = X.astype(bool) if subgroups == "conjunction" else X.astype(float)
+    d = X.shape[1]
+    if negations:
+        # negated literals as extra columns: index d + j means "column j is 0"
+        X_search = np.hstack([X_search, ~X_search])
 
     common = dict(verbose=verbose, n_min=n_min, time_limit=time_limit, group_type=group_type, return_opt_flag=True)
 
@@ -159,13 +171,16 @@ def find_subgroup(
         return None
 
     if subgroups == "conjunction":
-        result = DetectedSubgroup("conjunction", measure, 0.0, None, bool(optimal), backend, literals=[int(j) for j in desc])
+        result = DetectedSubgroup(
+            "conjunction", measure, 0.0, None, bool(optimal), backend,
+            literals=[int(j) for j in desc if j < d], negated_literals=[int(j) - d for j in desc if j >= d],
+        )
     else:
         result = DetectedSubgroup(
             "linear", measure, 0.0, None, bool(optimal), backend,
             coef=np.asarray(desc[:-1], dtype=float), threshold=float(desc[-1]),
         )
-    result.mask = result.contains(X_search)
+    result.mask = result.contains(X_search[:, :d])
     if measure == "msd":
         result.value = float(measures.msd(y, result.mask))
     elif measure == "spsf":

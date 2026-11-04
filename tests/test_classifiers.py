@@ -56,3 +56,11 @@ def test_dnf():
     y_hat = clf.predict(Xb)
     assert measures.fpsf(y, y_hat, find_subgroup(prot, y_hat, "fpsf", y_true=y).mask) <= 0.02 + 1e-3
     assert isinstance(clf.describe(), str)
+
+
+def test_linear_with_negated_subgroups():
+    X, y, prot = _data(3)
+    clf = FairLinearClassifier(gamma=0.01, measure="fpsf", subgroup_negations=True, time_limit=60).fit(X, y, prot)
+    worst = find_subgroup(prot, clf.predict(X), "fpsf", y_true=y, negations=True)
+    assert worst.value <= 0.01 + 1e-3
+    assert len(clf.protected_feature_names_) == 2 * prot.shape[1]

@@ -69,6 +69,9 @@ print(sg.value, sg.optimal, sg.describe(names))
 # bias of a classifier
 sg = find_subgroup(P, y_pred, measure="fpsf", y_true=y)
 
+# also allow negated literals, e.g. "NOT RAC1P = White"
+sg = find_subgroup(P, y_pred, measure="spsf", negations=True)
+
 # linear subgroups (MIO, requires a solver)
 sg = find_subgroup(P, y_pred, measure="spsf", subgroups="linear", solver="highs", time_limit=300)
 ```
@@ -101,6 +104,7 @@ Main parameters:
 |---|---|
 | `measure` | `"fpsf"`, `"fpsf_by_sd"` (FPSF constraints, with violating subgroups found by maximizing Subgroup Discrepancy on negative samples), `"spsf"`, `"msd"`, or `None` (no fairness constraint) |
 | `subgroups` | `"conjunction"` or `"linear"` |
+| `subgroup_negations` | Also allow negated literals in conjunction subgroups (e.g. `RAC1P != White`), which constrains a larger set of subgroups. Default `False`. |
 | `gamma` | Fairness threshold. Every subgroup must have bias ≤ γ on the training data. |
 | `detection_backend` | `"exact"` (default) or `"mio"`, for finding violating conjunction subgroups. Linear subgroups always use MIO. |
 | `sparsity` | (linear only) Penalty on the proportion of non-zero coefficients |

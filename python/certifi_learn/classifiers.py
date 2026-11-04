@@ -37,12 +37,14 @@ class _FairClassifier(ClassifierMixin, BaseEstimator):
             raise ValueError(f"subgroups must be one of {list(_SUBGROUPS)}")
         if self.detection_backend not in ("exact", "mio"):
             raise ValueError("detection_backend must be 'exact' or 'mio'")
+        if self.subgroup_negations and self.subgroups != "conjunction":
+            raise ValueError("subgroup_negations is supported only for conjunction subgroups")
 
     def _encode_protected(self, X_protected, y):
         self.protected_encoder_ = TabularEncoder(X_protected, y, self.categorical)
         if self.subgroups == "conjunction":
-            self.protected_feature_names_ = self.protected_encoder_.binary_names(False)
-            return self.protected_encoder_.binary(X_protected, False)
+            self.protected_feature_names_ = self.protected_encoder_.binary_names(self.subgroup_negations)
+            return self.protected_encoder_.binary(X_protected, self.subgroup_negations)
         self.protected_feature_names_ = self.protected_encoder_.numeric_names()
         return self.protected_encoder_.numeric(X_protected)
 
@@ -77,6 +79,8 @@ class FairLinearClassifier(_FairClassifier):
             (no fairness constraint).
         subgroups: "conjunction" (conjunctions of protected attribute values) or
             "linear" (linear threshold functions of the protected attributes).
+        subgroup_negations: allow negated literals in conjunction subgroups
+            (e.g. ``RAC1P != White``), i.e., constrain a larger set of subgroups.
         sparsity: weight of the penalty on the proportion of non-zero coefficients.
         time_limit: time limit of the solver in seconds.
         detection_backend: search for violating subgroups: "exact" (default) or
@@ -92,6 +96,7 @@ class FairLinearClassifier(_FairClassifier):
         gamma: float = 0.01,
         measure: str | None = "fpsf",
         subgroups: str = "conjunction",
+        subgroup_negations: bool = False,
         sparsity: float = 0.0,
         time_limit: float = 600,
         detection_backend: str = "exact",
@@ -102,6 +107,7 @@ class FairLinearClassifier(_FairClassifier):
         self.gamma = gamma
         self.measure = measure
         self.subgroups = subgroups
+        self.subgroup_negations = subgroup_negations
         self.sparsity = sparsity
         self.time_limit = time_limit
         self.detection_backend = detection_backend
@@ -158,8 +164,8 @@ class FairDNFClassifier(_FairClassifier):
 
     Args:
         n_terms: number of terms (rules) of the DNF.
-        gamma, measure, subgroups, time_limit, detection_backend, categorical,
-            verbose: see :class:`FairLinearClassifier`.
+        gamma, measure, subgroups, subgroup_negations, time_limit,
+            detection_backend, categorical, verbose: see :class:`FairLinearClassifier`.
 
     Features passed as an array must be binary; their negations are added
     automatically, so the rules can use both ``x`` and ``NOT x``.
@@ -171,6 +177,7 @@ class FairDNFClassifier(_FairClassifier):
         gamma: float = 0.01,
         measure: str | None = "fpsf",
         subgroups: str = "conjunction",
+        subgroup_negations: bool = False,
         time_limit: float = 600,
         detection_backend: str = "exact",
         categorical: list | None = None,
@@ -180,6 +187,7 @@ class FairDNFClassifier(_FairClassifier):
         self.gamma = gamma
         self.measure = measure
         self.subgroups = subgroups
+        self.subgroup_negations = subgroup_negations
         self.time_limit = time_limit
         self.detection_backend = detection_backend
         self.categorical = categorical

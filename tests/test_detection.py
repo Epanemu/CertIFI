@@ -73,3 +73,23 @@ def test_mio_linear_subgroups():
     # linear subgroups include all conjunctions, so they are at least as biased
     conj = find_subgroup(X, y_pred, "spsf")
     assert sg.value >= conj.value - 1e-4
+
+
+def test_negations_find_planted_subgroup():
+    rng = np.random.default_rng(0)
+    X = rng.random((400, 5)) < 0.5
+    y_pred = rng.random(400) < np.where(~X[:, 0] & X[:, 1], 0.1, 0.6)
+    plain = find_subgroup(X, y_pred, "spsf")
+    neg = find_subgroup(X, y_pred, "spsf", negations=True)
+    assert neg.literals == [1] and neg.negated_literals == [0]
+    assert neg.describe() == "x1 AND NOT x0"
+    assert neg.value > plain.value
+    assert neg.value == pytest.approx(measures.spsf(y_pred, neg.contains(X)))
+
+
+@pytest.mark.skipif(not _has_highs(), reason="pyomo with HiGHS not available")
+def test_negations_exact_and_mio_agree():
+    X, y_true, y_pred = _random_data(4, d=5)
+    exact = find_subgroup(X, y_pred, "spsf", negations=True)
+    mio = find_subgroup(X, y_pred, "spsf", negations=True, backend="mio", solver="highs", time_limit=60)
+    assert mio.optimal and exact.value == pytest.approx(mio.value, abs=1e-6)
