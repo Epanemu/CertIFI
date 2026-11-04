@@ -64,7 +64,14 @@ names = enc.binary_names(negations=False)
 
 # bias in the data: subgroup whose share differs most between positive and negative labels
 sg = find_subgroup(P, y, measure="msd")
-print(sg.value, sg.optimal, sg.describe(names))
+print(f"MSD = {sg.value:.3f}, proven optimal: {sg.optimal}")
+print(sg.describe(names))
+# e.g., on ACS Income (examples/detect_and_train.py):
+#   MSD = 0.194, proven optimal: True
+#   AGEP between [17, 24.2)
+
+# certify that no subgroup has bias above a threshold
+sg = find_subgroup(P, y, measure="msd", gamma=0.25)   # None: no subgroup has MSD > 0.25
 
 # bias of a classifier
 sg = find_subgroup(P, y_pred, measure="fpsf", y_true=y)
@@ -76,8 +83,8 @@ sg = find_subgroup(P, y_pred, measure="spsf", negations=True)
 sg = find_subgroup(P, y_pred, measure="spsf", subgroups="linear", solver="highs", time_limit=300)
 ```
 
-`find_subgroup` returns a `DetectedSubgroup` with the violation `value`, the
-membership `mask`, `optimal` (whether the subgroup is proven to be the most biased),
+`find_subgroup` returns a `DetectedSubgroup` with **the violation `value`** (of the
+chosen measure, on the given data), the membership `mask`, `optimal` (whether the subgroup is proven to be the most biased),
 and `describe()` / `contains(X_new)`. If you pass `gamma=...`, it returns a subgroup
 only if one violates the threshold, and `None` otherwise. That `None` certifies
 γ-fairness, unless a warning reports that the search was stopped by the time limit.

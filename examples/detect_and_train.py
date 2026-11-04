@@ -26,6 +26,8 @@ names = encoder.binary_names(negations=False)
 # Maximum Subgroup Discrepancy: the conjunction whose frequency differs most
 # between people with positive and negative labels (exact search, no solver needed)
 sg = find_subgroup(P_bin, y, measure="msd")
+# sg.value: the violation (here MSD) of the found subgroup; sg.optimal: proven to be the maximum;
+# sg.mask: which samples belong to it; sg.describe(names): readable definition
 print(f"\nMost biased subgroup in the data (MSD = {sg.value:.3f}, proven optimal: {sg.optimal}):")
 print("   ", sg.describe(names))
 
