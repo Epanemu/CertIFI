@@ -1,162 +1,150 @@
 # CertIFI: Certifiably Intersectionally Fair & Interpretable models
 
-Code for the paper **Intersectional Fairness via Mixed-Integer Optimization**
-by Jiří Němeček, Mark Kozdoba, Illia Kryvoviaz, Tomáš Pevný and Jakub Mareček (NeurIPS 2026).
+`certifi-learn` finds the **most biased subgroup** in data or in a model's predictions,
+and trains **interpretable classifiers** (linear models and rule sets) that are
+**certifiably fair** on all intersectional subgroups, for example all combinations
+of sex, race and age group.
 
-The repository contains a Mixed-Integer Optimization (MIO) framework for
+> [!NOTE]
+> This library extends the NeurIPS 2026 paper
+> *Intersectional Fairness via Mixed-Integer Optimization* (see [Citation](#citation)).
+> Notably, it adds an exact branch-and-bound subgroup search (implemented in Rust)
+> that replaces the Mixed-Integer Optimization (MIO) search for conjunction
+> subgroups by default. The code used for the experiments in the paper is available
+> at the tag [`neurips2026`](https://github.com/Epanemu/CertIFI/tree/neurips2026).
 
-1. **detecting the most biased subgroup** in data or in the predictions of a classifier, under
-   the Statistical Parity Subgroup Fairness (SPSF) and Subgroup Discrepancy (SD / MSD) measures, with
-   subgroups described either as conjunctions of protected attribute values or as linear threshold
-   functions of the protected attributes, and
-2. **training interpretable classifiers** (linear models and DNFs) **under intersectional fairness
-   constraints** (FPSF, SPSF, MSD), where the exponentially many fairness constraints are added
-   lazily as cutting planes, using the detection MIO to find the most violating subgroup.
+## Features
 
-All formulations are written in [Pyomo](https://www.pyomo.org/) and solved with
-[Gurobi](https://www.gurobi.com/).
+- **Bias detection.** Find the subgroup with the largest violation of
+  - Subgroup Discrepancy / MSD,
+  - Statistical Parity Subgroup Fairness (SPSF),
+  - False Positive Subgroup Fairness (FPSF).
+
+  Subgroups can be
+  - **conjunctions** of protected attribute values (e.g. `SEX = Female AND RAC1P = Black`). The exact search is fast, needs no solver, and its result is proven optimal.
+  - **linear threshold functions** of the protected attributes, found by MIO.
+- **Fair training.** Linear classifiers and DNFs (rule sets), trained to optimality
+  under the constraint that *every* subgroup has bias at most γ. Fairness
+  constraints are generated lazily: only the subgroups that are actually violated
+  are added, so there's no need to enumerate the exponentially many subgroups.
+- A scikit-learn-style API that works with pandas DataFrames. Categorical
+  features are encoded automatically.
 
 ## Installation
 
-Tested with Python 3.11.
-
 ```bash
-pip install -r requirements.txt
+pip install "certifi-learn[gurobi] @ git+https://github.com/Epanemu/CertIFI"
 ```
 
-**Solver.** The experiments in the paper use Gurobi, which requires a license
-([free for academic use](https://www.gurobi.com/academia/academic-program-and-licenses/)).
-The size-limited license bundled with `pip install gurobipy` is not sufficient for realistic data sizes.
-Training uses Gurobi-specific lazy-constraint callbacks (`gurobi_persistent`), so it requires Gurobi.
-Bias detection (`experiment_eval.py` with `solver=highs`) can also use the open-source
-[HiGHS](https://highs.dev/) solver (`pip install highspy`).
+Building from source requires a [Rust toolchain](https://rustup.rs/).
 
-**Data.** The datasets come from the US Census (ACS PUMS, 2018, 1-Year, California) via
-[folktables](https://github.com/socialfoundations/folktables). They are downloaded automatically
-into `./data/` on first use (about 250 MB).
+Optional dependencies (extras):
 
-## Repository structure
-
-| Path | Content |
+| Extra | Needed for |
 |---|---|
-| `experiment_eval.py` | Bias detection experiments: finding the most biased subgroup in the data (Sec. 4.1, App. C.1) |
-| `experiment_train.py` | Training experiments: fair linear / DNF classifiers and baselines (Sec. 4.2, App. C.2, C.3) |
-| `bias_detect_mio.py` | `BiasDetect`: MIO formulations for finding the most biased subgroup (SD/MSD and SPSF objectives; conjunction and linear subgroups) |
-| `linear_fair_classifier.py` | `LinearFairClassifier`: MIO training of a (optionally sparse) linear classifier with lazily generated fairness constraints |
-| `dnf_fair_classifier.py` | `DNFFairClassifier`: the same for DNF (rule set) classifiers |
-| `utils.py` | Evaluation of the fairness measures (MSD, SPSF, FPSF) for a given subgroup, accuracy, F1 |
-| `scenarios/` | Loading and subsampling of the folktables datasets, definition of protected attributes |
-| `data_handler/`, `binarizer/` | Data encoding (one-hot, scaling) and binarization of features |
-| `gerryfair/` | Modified copy of [GerryFair](https://github.com/algowatchPenn/GerryFair) (MIT), used as a baseline; see `gerryfair/MODIFICATIONS.md` |
-| `conf/` | [Hydra](https://hydra.cc/) configuration of the experiments |
-| `ablations/full_rules/` | Ablation only: all conjunction-subgroup constraints added upfront instead of lazily (App. B) |
-| `plotting/` | Scripts used to produce the figures from experiment outputs |
+| `gurobi` | Training classifiers (Gurobi lazy-constraint callbacks) and MIO detection. Requires a [Gurobi license](https://www.gurobi.com/academia/academic-program-and-licenses/), free for academic use. |
+| `highs` | MIO detection with the open-source [HiGHS](https://highs.dev/) solver, an alternative to Gurobi |
+| `mio` | Pyomo only, if you bring your own solver installation |
+| `examples` | The folktables example |
 
-## Running experiments
+Bias detection on conjunction subgroups needs no extras.
 
-Both experiment scripts are Hydra apps. Settings are in `conf/config_eval.yaml` and
-`conf/config_train.yaml`, and the defaults match the paper. Any key can be overridden on the
-command line. A single run writes its results to `outputs/<date>/<time>/output.txt`. A sweep (`-m`)
-runs over the parameters in the `hydra.sweeper.params` section of the config and writes to
-`multirun/...`, or with `+dir_structure=cluster_batch_eval` / `+dir_structure=cluster_batch_train`
-to `batch_out/<eval|train>/<script>/<method>-<scenario>[-<gamma>]/<seed>/`.
+## Quickstart
 
-Datasets (`scenario`): `ACSIncome`, `ACSPublicCoverage`, `ACSMobility`, `ACSEmployment`,
-`ACSTravelTime`. Every configuration in the paper is run with seeds 0 to 4, which determine the
-random data subsample.
-
-To run a sweep on a SLURM cluster, install `hydra-submitit-launcher` and add
-`hydra/launcher=slurm hydra.launcher.partition=<partition>` (see `conf/hydra/launcher/slurm.yaml`).
-
-### Bias detection (`experiment_eval.py`)
-
-`method` is `mio_<objective>_<subgroups>` or `gerry_spsf`:
-
-- objective `msd` maximizes Subgroup Discrepancy (for conjunction subgroups, this is MSD); `spsf` maximizes SPSF,
-- subgroups `rule` are conjunctions of protected attribute values, `linear` are linear threshold functions,
-- `gerry_spsf` is the GerryFair auditor (SPSF, linear subgroups).
-
-Linear subgroups are warm-started with the GerryFair solution if it is numerically usable,
-otherwise with a logistic regression model.
-
-```bash
-# single run
-python experiment_eval.py method=mio_msd_rule scenario=ACSIncome seed=0
-
-# Figure 2: 50,000 samples, 10,000 s limit, all methods, datasets and seeds
-python experiment_eval.py -m +dir_structure=cluster_batch_eval
-
-# Appendix C.1: shorter time limits, and the full datasets with a 24 h limit
-python experiment_eval.py -m +dir_structure=cluster_batch_eval time_limit=300
-python experiment_eval.py -m +dir_structure=cluster_batch_eval time_limit=600
-python experiment_eval.py -m +dir_structure=cluster_batch_eval time_limit=86400 max_samples=1000000 seed=0
-```
-
-(Use a different output directory for each setting, e.g. via `hydra.sweep.dir=...`.)
-
-`output.txt` contains the configuration, the found subgroup (the conjunction, or the coefficients and
-threshold of the linear function), its `SPSF` and `MSD` values, the `Time` taken, and whether the
-solution was proven `Optimal`.
-
-### Training (`experiment_train.py`)
-
-`model` is `<predictor>[_<measure>_<subgroups>]`:
-
-| Part | Values |
-|---|---|
-| predictor | `linear` (linear classifier), `dnf` (DNF with `n_terms` terms), `gerry` (GerryFair baseline) |
-| measure | `fpsf`: FPSF constraints, violating subgroup found by maximizing FPSF <br> `msd0`: FPSF constraints, violating subgroup found by maximizing SD on the negative samples ("FPSF by SD") <br> `spsf`: SPSF constraints <br> `msd`: MSD constraints (with threshold 4γ) |
-| subgroups | `rule` (conjunctions, S_A) or `linear` (linear threshold functions, S_L) |
-
-`linear` and `dnf` without a suffix are the models trained without fairness constraints. GerryFair
-supports `gerry_fpsf` and `gerry_spsf`.
-
-Paper settings, which are the config defaults: 10,000 training and 10,000 test samples, a 4 h time limit, and 5 min to
-find a violating subgroup. The fairness threshold is γ = 0.01, halved automatically for ACSMobility. GerryFair runs
-`time_limit / 5` iterations.
-
-```bash
-# single run
-python experiment_train.py model=linear_fpsf_rule scenario=ACSIncome seed=0
-
-# Figure 3 (dense linear models): base model, 4 fair MIO models and GerryFair
-python experiment_train.py -m +dir_structure=cluster_batch_train
-
-# Appendix C.2 (Figure 9): additionally SPSF and MSD constraints
-python experiment_train.py -m +dir_structure=cluster_batch_train \
-    model=linear_spsf_rule,linear_msd_rule,linear_spsf_linear,linear_msd_linear
-
-# Sparse linear models (Figure 4, Figure 10)
-python experiment_train.py -m +dir_structure=cluster_batch_train sparsity_term=0.1 \
-    model=linear,linear_fpsf_rule,linear_msd0_rule,linear_fpsf_linear,linear_msd0_linear,linear_spsf_rule,linear_msd_rule,linear_spsf_linear,linear_msd_linear
-
-# DNF classifiers (Appendix C.3)
-python experiment_train.py -m +dir_structure=cluster_batch_train_dnf \
-    model=dnf,dnf_fpsf_rule,dnf_msd0_rule n_terms=1,3
-```
-
-(Again, use separate output directories for the dense and sparse runs.)
-
-After training, the classifier is audited on the training and test sets with GerryFair and with
-MIO over conjunction subgroups. `output.txt` contains the learned model, the solver status, the
-number of generated cuts (fairness constraints), train/test accuracy and F1, and the train/test
-values of MSD, FPSF and SPSF found by each auditor (`Gerry FPSF`, `MIO FPSF`, ...).
-
-### Using the components directly
+### Finding the most biased subgroup
 
 ```python
-from bias_detect_mio import BiasDetect
-from linear_fair_classifier import LinearFairClassifier
+from certifi_learn import find_subgroup
+from certifi_learn.encoding import TabularEncoder
 
-# X_prot: binarized protected attributes (bool), y: labels or predictions (bool)
-rule = BiasDetect().find_subgroup(X_prot, y, bias_type="msd", group_type="rule", time_limit=300)
+# protected: DataFrame of protected attributes, y: binary labels, y_pred: model predictions
+enc = TabularEncoder(protected)                 # binarizes into literals like "SEX = Female"
+P = enc.binary(protected, negations=False)
+names = enc.binary_names(negations=False)
 
-# X: encoded features (float)
-clf = LinearFairClassifier(gamma=0.01, fairness_type="FPSF", subgroup_type="rule")
-coefs, threshold = clf.find_classifier(X, X_prot, y, time_limit=3600, epsilon=1e-3, warmstart=True)
+# bias in the data: subgroup whose share differs most between positive and negative labels
+sg = find_subgroup(P, y, measure="msd")
+print(sg.value, sg.optimal, sg.describe(names))
+
+# bias of a classifier
+sg = find_subgroup(P, y_pred, measure="fpsf", y_true=y)
+
+# linear subgroups (MIO, requires a solver)
+sg = find_subgroup(P, y_pred, measure="spsf", subgroups="linear", solver="highs", time_limit=300)
 ```
 
-See `experiment_eval.py` and `experiment_train.py` for how the data is encoded.
+`find_subgroup` returns a `DetectedSubgroup` with the violation `value`, the
+membership `mask`, `optimal` (whether the subgroup is proven to be the most biased),
+and `describe()` / `contains(X_new)`. If you pass `gamma=...`, it returns a subgroup
+only if one violates the threshold, and `None` otherwise. That `None` certifies
+γ-fairness, unless a warning reports that the search was stopped by the time limit.
+
+### Training a fair classifier
+
+```python
+from certifi_learn import FairLinearClassifier, FairDNFClassifier
+
+clf = FairLinearClassifier(gamma=0.01, measure="fpsf", time_limit=600)
+clf.fit(X, y, X_protected)          # X may include the protected attributes
+y_pred = clf.predict(X_test)
+
+print(clf.n_cuts_)                   # number of subgroups constrained during training
+print(clf.describe_cut_subgroups())  # which ones
+
+rules = FairDNFClassifier(n_terms=3, gamma=0.01, measure="fpsf").fit(X, y, X_protected)
+print(rules.describe())
+```
+
+Main parameters:
+
+| Parameter | Values |
+|---|---|
+| `measure` | `"fpsf"`, `"fpsf_by_sd"` (FPSF constraints, with violating subgroups found by maximizing Subgroup Discrepancy on negative samples), `"spsf"`, `"msd"`, or `None` (no fairness constraint) |
+| `subgroups` | `"conjunction"` or `"linear"` |
+| `gamma` | Fairness threshold. Every subgroup must have bias ≤ γ on the training data. |
+| `detection_backend` | `"exact"` (default) or `"mio"`, for finding violating conjunction subgroups. Linear subgroups always use MIO. |
+| `sparsity` | (linear only) Penalty on the proportion of non-zero coefficients |
+| `time_limit` | Solver time limit in seconds. The best solution found so far is returned. |
+
+γ-fairness is guaranteed on the training data. On new data, the bias can be
+somewhat higher. Audit your model on held-out data with `find_subgroup`.
+
+## Bias measures
+
+For a classifier h and a subgroup S:
+
+| Measure | Definition |
+|---|---|
+| SPSF | P(S) · \|P(h=1) − P(h=1 \| S)\| |
+| FPSF | P(S, y=0) · \|P(h=1 \| y=0) − P(h=1 \| S, y=0)\| |
+| SD / MSD | \|P(S \| y=1) − P(S \| y=0)\|, i.e. how differently S is represented among positive and negative samples. Maximized over conjunctions, this is the Maximum Subgroup Discrepancy. |
+
+`certifi_learn.measures` evaluates these for a given subgroup mask.
+`certifi_learn.exact` exposes the Rust search directly (`msd`, `spsf`, `fpsf`), with
+options such as sample weights, negated literals and grouped one-hot columns. See
+[`docs/subgroup_pruning_proof.tex`](docs/subgroup_pruning_proof.tex) for the
+algorithm and its proof of correctness.
+
+## Example
+
+[`examples/detect_and_train.py`](examples/detect_and_train.py) runs end to end on
+the US Census data (ACS Income, via [folktables](https://github.com/socialfoundations/folktables)).
+It finds the most biased subgroup in the data, trains an unconstrained and a fair
+linear model, and audits both on test data:
+
+```bash
+pip install "certifi-learn[gurobi,examples] @ git+https://github.com/Epanemu/CertIFI"
+python examples/detect_and_train.py
+```
+
+## Development
+
+```bash
+pip install -e ".[gurobi,highs,test,examples]"   # builds the Rust extension
+pytest
+```
+
+Tests that need HiGHS or a Gurobi license are skipped if those are not available.
 
 ## Citation
 
@@ -173,5 +161,4 @@ See `experiment_eval.py` and `experiment_train.py` for how the data is encoded.
 
 ## License
 
-The code is released under the [CC BY 4.0](LICENSE) license. The `gerryfair/` directory is a modified
-copy of GerryFair, distributed under its original MIT license (`gerryfair/LICENSE`).
+[MIT](LICENSE)

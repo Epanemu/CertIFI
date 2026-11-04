@@ -1,0 +1,466 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\DeclareMathOperator{\argmax}{arg\,max}
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+
+\title{Validity of Anti-Monotone Bound-and-Prune Search\\
+for the Maximally Violating Conjunctive Subgroup\\
+\large (unifying MSD, SPSF and FPSF)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We formalize and prove the correctness of a level-wise (breadth-first, increasing-order)
+branch-and-bound search over conjunctive subgroups that finds the subgroup of maximal
+violation for the three intersectional-bias measures Maximum Subgroup Discrepancy (MSD)
+\cite{msd}, Statistical Parity Subgroup Fairness (SPSF) and False Positive Subgroup
+Fairness (FPSF) \cite{kearns18}. The search prunes a subgroup, and \emph{every} subgroup
+obtained from it by specifying further attributes, as soon as a cheaply computable
+upper bound on its violation falls below the best violation already found. We isolate
+the single abstract property (an \emph{anti-monotone optimistic bound}) that makes this
+sound for all three measures, instantiate it exactly as the two bound formulas quoted
+in the problem statement, show that a canonical (order-restricted) generation scheme
+produces every subgroup exactly once — so the same pruning check automatically covers
+every path by which a ``pointless'' subgroup could otherwise be reconstructed from a
+different parent — and prove that the returned value and subgroup are always globally
+optimal.
+\end{abstract}
+
+\section{Setting: the conjunctive subgroup lattice}
+
+Let $A=\{a_1,\dots,a_d\}$ be a finite set of discrete protected attributes, attribute
+$a$ taking values in a finite domain $\mathrm{Val}(a)$. An \emph{attribute-value pair}
+(a \emph{literal}) is a statement $a\!=\!v$ with $a \in A$, $v\in\mathrm{Val}(a)$. A
+\emph{subgroup} is a set of literals using every attribute at most once,
+\[
+S=\{a_{i_1}\!=\!v_1,\dots,a_{i_k}\!=\!v_k\},\qquad a_{i_1},\dots,a_{i_k}\in A \text{ pairwise distinct.}
+\]
+Write $\mathrm{attr}(S)\subseteq A$ for the attributes it specifies and $|S|=k$ for its
+\emph{order}. $S_A$ denotes the set of \emph{all} such subgroups over all subsets of
+$A$ — exactly the family of ``intersections of attribute-value pairs for all subsets
+of $A$'' used to define $\mathcal{S}_A$ for MSD, SPSF and FPSF alike. For a point $x$,
+$S(x):=\prod_{(a=v)\in S}\mathbf{1}[x_a=v]$, and $X_S:=\{x : S(x)=1\}$.
+
+For $S,S'\in S_A$, write $S \preceq S'$ (``$S'$ \emph{refines} $S$'', or $S$ is a
+\emph{sub-conjunction}/\emph{ancestor} of $S'$) iff $S\subseteq S'$ as sets of literals.
+$(S_A,\preceq)$ is a partial order with least element $\emptyset$ (the whole
+population), and it is exactly the order in which the rough algorithm walks the search
+space: $|S|=1$ before $|S|=2$ before $|S|=3,\dots$, i.e.\ any $S\preceq S'$ with
+$S\neq S'$ satisfies $|S|<|S'|$.
+
+\begin{lemma}[Coverage monotonicity]\label{lem:cov}
+For any (possibly sub-probability) measure $\mu$ on the input space and any
+$S\preceq S'$ in $S_A$, $X_{S'}\subseteq X_S$ and hence $\mu(X_{S'})\le \mu(X_S)$.
+\end{lemma}
+\begin{proof}
+$S\subseteq S'$ means every constraint defining $X_S$ is also imposed by $S'$, so
+$X_{S'}=\bigcap_{\ell\in S'}X_\ell \subseteq \bigcap_{\ell\in S}X_\ell = X_S$.
+Monotonicity of measures under inclusion gives $\mu(X_{S'})\le\mu(X_S)$.
+\end{proof}
+
+This is the only structural fact used below: \emph{specifying more attribute-value
+pairs can only shrink the covered population, under every distribution at once.}
+Applying it with $\mu=P(\cdot,y=0)$ (a sub-probability measure) shows it also
+governs FPSF's restriction to the negative class.
+
+\section{The three violation measures}
+
+\begin{definition}[MSD \cite{msd}]
+Given two distributions $D_1,D_2$ on $X$,
+\[
+\mathrm{MSD}(D_1,D_2;A)=\sup_{S\in S_A}\mathrm{SD}(S),\qquad
+\mathrm{SD}(S):=\bigl|P_{D_1}(X_S)-P_{D_2}(X_S)\bigr|.
+\]
+\end{definition}
+
+\begin{definition}[SPSF \cite{kearns18}]
+Given a distribution $D$ and classifier $h$, let $p_{\mathrm{base}}:=P(h(x)=1)$. Then
+\[
+\mathrm{SPSF}(h,S):=P(X_S)\cdot\bigl|p_{\mathrm{base}}-P(h(x)=1\mid X_S)\bigr|.
+\]
+$h$ satisfies $\gamma$-SPSF w.r.t.\ $S_A$ iff $\mathrm{SPSF}(h,S)\le\gamma$ for every
+$S\in S_A$; detection asks for $S^\star\in\argmax_{S\in S_A}\mathrm{SPSF}(h,S)$.
+\end{definition}
+
+\begin{definition}[FPSF \cite{kearns18}]
+With $p_{\mathrm{base},0}:=P(h(x)=1\mid y=0)$,
+\[
+\mathrm{FPSF}(h,S):=P(X_S,y=0)\cdot\bigl|p_{\mathrm{base},0}-P(h(x)=1\mid X_S,y=0)\bigr|.
+\]
+\end{definition}
+
+The unifying paper ties the three together: $\mathrm{FPSF}(h,S)=P(y=0)\cdot
+\mathrm{SPSF}_{D\mid y=0}(h,S)$ (FPSF \emph{is} SPSF evaluated on the sub-population
+$\{y=0\}$), and, writing $D_{h=1},D_{h=0}$ for the label-conditional distributions
+induced by $h$,
+\[
+\mathrm{SD}\bigl(S;D_{h=1},D_{h=0}\bigr)=\frac{\mathrm{SPSF}(h,S)}{P(h(x)=1)\,P(h(x)=0)},
+\]
+a proportionality with a constant \emph{independent of $S$}, hence
+\[
+\argmax_{S\in S_A}\mathrm{SPSF}(h,S)=\argmax_{S\in S_A}\mathrm{SD}(S;D_{h=1},D_{h=0})
+\]
+(Corollary~1.1, ``Equivalence of SPSF and MSD''). This is why one abstract algorithm,
+instantiated three ways below, suffices for all three measures, and why finding the
+arg-max for one is exactly as good as finding it for the others.
+
+\section{An anti-monotone optimistic bound}
+
+\begin{definition}[Valid anti-monotone bound]
+Let $V:S_A\to\mathbb{R}_{\ge0}$ be a violation function. We call
+$U:S_A\to\mathbb{R}_{\ge0}$ a \emph{valid anti-monotone bound} for $V$ if
+\begin{enumerate}[label=(B\arabic*)]
+\item \textbf{Validity:} $V(S)\le U(S)$ for every $S\in S_A$;
+\item \textbf{Anti-monotonicity:} $S\preceq S' \implies U(S')\le U(S)$.
+\end{enumerate}
+\end{definition}
+
+\begin{lemma}[Bound transfer]\label{lem:transfer}
+If $U$ is a valid anti-monotone bound for $V$, then for every $S\preceq S'$ in $S_A$,
+$V(S')\le U(S)$.
+\end{lemma}
+\begin{proof}
+$V(S')\overset{(B1)}{\le}U(S')\overset{(B2)}{\le}U(S)$.
+\end{proof}
+
+Lemma~\ref{lem:transfer} is the whole point: a bound computed \emph{at a small
+subgroup $S$}, using only $S$'s own (cheap) coverage, dominates the exact violation of
+\emph{every subgroup obtainable from $S$ by adding more attribute-value pairs} —
+regardless of which pairs, how many, or in what order they are added. We now build such
+a $U$ for each measure; the two resulting formulas are exactly the two bullet points of
+the informal description.
+
+\begin{proposition}[Bound for SPSF]\label{prop:spsf}
+Let $\bar\delta_{\mathrm{SP}}:=\max(p_{\mathrm{base}},1-p_{\mathrm{base}})$ and
+$U_{\mathrm{SP}}(S):=P(X_S)\cdot\bar\delta_{\mathrm{SP}}$. Then $U_{\mathrm{SP}}$ is a
+valid anti-monotone bound for $\mathrm{SPSF}(h,\cdot)$.
+\end{proposition}
+\begin{proof}
+\emph{(B1)} Since $P(h=1\mid X_S)\in[0,1]$, the farthest this conditional probability
+can be from the fixed constant $p_{\mathrm{base}}$ while staying in $[0,1]$ is
+$\max(p_{\mathrm{base}},1-p_{\mathrm{base}})=\bar\delta_{\mathrm{SP}}$, so
+$|p_{\mathrm{base}}-P(h=1\mid X_S)|\le\bar\delta_{\mathrm{SP}}$; multiplying by
+$P(X_S)\ge0$ gives $\mathrm{SPSF}(h,S)\le U_{\mathrm{SP}}(S)$.
+\emph{(B2)} $\bar\delta_{\mathrm{SP}}$ is a global constant (it does not depend on
+$S$); by Lemma~\ref{lem:cov}, $S\preceq S'\Rightarrow P(X_{S'})\le P(X_S)$, hence
+$U_{\mathrm{SP}}(S')\le U_{\mathrm{SP}}(S)$.
+\end{proof}
+
+\begin{proposition}[Bound for FPSF]\label{prop:fpsf}
+Let $\bar\delta_{\mathrm{FP}}:=\max(p_{\mathrm{base},0},1-p_{\mathrm{base},0})$ and
+$U_{\mathrm{FP}}(S):=P(X_S,y=0)\cdot\bar\delta_{\mathrm{FP}}$. Then $U_{\mathrm{FP}}$
+is a valid anti-monotone bound for $\mathrm{FPSF}(h,\cdot)$.
+\end{proposition}
+\begin{proof}
+Identical to Proposition~\ref{prop:spsf}, applying Lemma~\ref{lem:cov} to the
+sub-probability measure $\mu(\cdot)=P(\cdot,y=0)$ in place of $P(\cdot)$.
+\end{proof}
+
+\begin{proposition}[Bound for MSD]\label{prop:msd}
+Let $U_{\mathrm{MSD}}(S):=\max\bigl(P_{D_1}(X_S),P_{D_2}(X_S)\bigr)$. Then
+$U_{\mathrm{MSD}}$ is a valid anti-monotone bound for $\mathrm{SD}(\cdot)$.
+\end{proposition}
+\begin{proof}
+\emph{(B1)} For any $a,b\ge0$, $a-b\le a\le\max(a,b)$ and $b-a\le b\le\max(a,b)$, so
+$|a-b|\le\max(a,b)$. Taking $a=P_{D_1}(X_S),\,b=P_{D_2}(X_S)$ gives
+$\mathrm{SD}(S)=|a-b|\le\max(a,b)=U_{\mathrm{MSD}}(S)$.
+\emph{(B2)} By Lemma~\ref{lem:cov} applied separately to $D_1$ and $D_2$,
+$S\preceq S'$ implies $P_{D_1}(X_{S'})\le P_{D_1}(X_S)$ and
+$P_{D_2}(X_{S'})\le P_{D_2}(X_S)$; the max of two coordinatewise-dominated
+nonnegative numbers is itself dominated, so $U_{\mathrm{MSD}}(S')\le U_{\mathrm{MSD}}(S)$.
+\end{proof}
+
+\begin{remark}
+Note the asymmetry the two bound formulas encode: for SPSF/FPSF the ``deviation''
+factor $|p_{\mathrm{base}}-P(h=1\mid X_S)|$ is bounded by a \emph{universal} constant
+because a conditional probability always lies in $[0,1]$ regardless of $S$ — only the
+\emph{weight} $P(X_S)$ needs to shrink monotonically. For MSD there is no such fixed
+base rate to compare against; instead the two coverages $P_{D_1}(X_S),P_{D_2}(X_S)$
+themselves box in every possible value of $\mathrm{SD}$ of any refinement, and the
+bound is simply the larger of the two coverages, with no extra multiplicative factor.
+Both are exactly the two cases described informally: ``$P(\text{subgroup})\cdot
+\max(1-p_{\mathrm{base}},p_{\mathrm{base}})$'' and ``$\max$ of the subgroup's
+probability under either distribution.''
+\end{remark}
+
+\section{Canonical generation order}
+
+The search must also avoid re-deriving the same subgroup from several different
+smaller conjunctions, and must know how to prune it in every such case at once. The
+following resolves this at the level of \emph{how candidates are generated}, so that
+no post-hoc bookkeeping is needed.
+
+Fix an arbitrary but fixed order $a_1<a_2<\dots<a_d$ on $A$ — any order will do; it is
+only ever used to break generation ties. For $S\neq\emptyset$ define
+\[
+\mathrm{top}(S):=\max\{i : a_i\in\mathrm{attr}(S)\}.
+\]
+In words, $\mathrm{top}(S)$ is simply \emph{the position, in the fixed order, of
+whichever attribute already used by $S$ comes last} — informally, ``how far along the
+attribute order $S$ has already reached.'' It is an index into $A$, not the size of
+$S$: e.g.\ if $a_1<a_2<a_3<a_4$ and $S=\{a_1\!=\!v,\,a_3\!=\!w\}$, then $|S|=2$ but
+$\mathrm{top}(S)=3$, because the attributes used by $S$ are $a_1$ and $a_3$, and $a_3$
+is the later of the two. We set $\mathrm{top}(\emptyset):=0$ (the empty subgroup has
+not reached any attribute yet, so the ``next'' attribute available to it is $a_1$).
+
+Using this, define the \emph{canonical parent} of $S$ as the subgroup obtained by
+dropping $S$'s \emph{last-indexed} literal:
+\[
+\pi(S):=S\setminus\{\ell\},\quad \ell \text{ the literal of $S$ on attribute } a_{\mathrm{top}(S)} .
+\]
+Continuing the example, $\pi(S)=\{a_1\!=\!v\}$ (we drop the literal on $a_3$, the
+attribute achieving $\mathrm{top}(S)=3$, and keep the literal on $a_1$).
+
+\begin{lemma}[Unique generation]\label{lem:tree}
+The map $\pi$ makes $(S_A,\pi)$ a rooted tree with root $\emptyset$, whose children are
+\[
+\mathrm{children}(T)=\bigl\{\,T\cup\{a_j\!=\!v\}\ :\ a_j\in A,\ j>\mathrm{top}(T),\ v\in\mathrm{Val}(a_j)\,\bigr\}.
+\]
+In words: a subgroup's children are obtained by adding one literal on an attribute
+that comes \emph{strictly after} $a_{\mathrm{top}(T)}$ in the fixed order — never on
+an attribute earlier than or equal to $\mathrm{top}(T)$. In the running example,
+$T=\{a_1\!=\!v,a_3\!=\!w\}$ has $\mathrm{top}(T)=3$, so its children add a literal on
+$a_4$ (since $4>3$); they never add one on $a_2$, since $2<3=\mathrm{top}(T)$. This is
+exactly what keeps the tree loop-free: $\{a_1\!=\!v,a_2\!=\!u,a_3\!=\!w\}$ is
+\emph{not} a child of $T$ — it is reached only via its own canonical parent
+$\{a_1\!=\!v,a_2\!=\!u\}$ (drop $a_3$, the last-indexed literal), a different node at
+the same level as $T$. So the two size-3 refinements of $\{a_1{=}v\}$ that use $a_2$
+or $a_3$ next are never confused with one another; each has exactly one route into the
+tree. Consequently every $S\in S_A$ has a unique generating path from the root, i.e.\
+is constructed exactly once, by exactly one parent.
+\end{lemma}
+\begin{proof}
+Write the literals of any non-empty $S$ in increasing order of attribute index,
+$a_{i_1}<\dots<a_{i_k}$. This exhibits exactly one chain
+$\emptyset\prec\{a_{i_1}\!=\!v_1\}\prec\{a_{i_1}\!=\!v_1,a_{i_2}\!=\!v_2\}\prec\dots\prec S$
+in which each step appends the literal whose attribute index is currently largest.
+$\pi$ removes precisely the last element of \emph{this} chain, so $\pi$ and ``append
+the literal with the next-largest index'' are mutually inverse operations; hence the
+chain above is the \emph{only} root-to-$S$ path, and $\pi(S)$ is well defined and
+unique.
+\end{proof}
+
+This is exactly what lets the algorithm ``neatly'' handle candidates that would
+otherwise arise from several different conjunctions: with attributes always appended
+in the same fixed global order, there simply is no second parent. If a subgroup $S$ is
+pruned, every subgroup that $S$'s literal set is a subset of is either a strict
+descendant of $S$ in this tree (and is therefore never even instantiated, because
+generation only proceeds from survivors) or is not a superset reachable through $S$ at
+all — but then it has its own, different, canonical parent $S''\ne S$ with
+$S''\preceq$ it, which is checked against the very same bound independently and
+correctly on its own path. No candidate is ever checked twice, and no candidate can
+silently evade the check via ``another route,'' because it has exactly one route.
+
+\section{Algorithm}
+
+Recall $\mathrm{top}(S)$ is just the index (in the fixed attribute order
+$a_1<\dots<a_d$) of the last attribute already used by $S$, with
+$\mathrm{top}(\emptyset):=0$; ``$j>\mathrm{top}(S)$'' below means ``any attribute not
+yet used by $S$ and coming after all attributes $S$ already uses.''
+
+\begin{algorithm}[H]
+\caption{Level-wise bound-and-prune search for $\argmax_{S\in S_A}V(S)$}
+\label{alg:main}
+\begin{algorithmic}[1]
+\Require attributes $a_1<\dots<a_d$ with value sets $\mathrm{Val}(a_i)$; a violation
+function $V$ and a valid anti-monotone bound $U$ for it (Propositions~\ref{prop:spsf}--\ref{prop:msd})
+\Ensure $\tau=\max_{S\in S_A}V(S)$ and a subgroup $S^\star$ attaining it
+\State $\tau \gets 0$; \quad $S^\star \gets \textsc{None}$
+\State $\mathrm{Frontier} \gets \{\{a_j\!=\!v\}\ :\ a_j\in A,\ v\in\mathrm{Val}(a_j)\}$
+       \Comment{all size-1 subgroups}
+\While{$\mathrm{Frontier}\neq\emptyset$}
+  \State $\mathrm{NextFrontier}\gets\emptyset$
+  \ForAll{$S\in\mathrm{Frontier}$} \Comment{one full level: fixed $|S|=k$, single pairs before pairs before triples...}
+    \If{$U(S)\le\tau$} \Comment{\emph{bound check, before computing $V(S)$}}
+      \State \textbf{continue} \Comment{prune $S$: skip it, and generate none of its refinements}
+    \EndIf
+    \State $v \gets V(S)$ \Comment{only survivors pay for the exact violation}
+    \If{$v>\tau$}
+      \State $\tau\gets v$;\quad $S^\star\gets S$
+    \EndIf
+    \ForAll{$a_j\in A$ with $j>\mathrm{top}(S)$, \ $v'\in\mathrm{Val}(a_j)$} \Comment{canonical children only}
+      \State $\mathrm{NextFrontier}\gets\mathrm{NextFrontier}\cup\{S\cup\{a_j\!=\!v'\}\}$
+    \EndFor
+  \EndFor
+  \State $\mathrm{Frontier}\gets\mathrm{NextFrontier}$
+\EndWhile
+\State \Return $(\tau,S^\star)$
+\end{algorithmic}
+\end{algorithm}
+
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lllll}
+\hline
+Measure & weight $w(S)$ used in $U$ & precomputed once & $U(S)$ & $V(S)$\\
+\hline
+SPSF & $P(X_S)$ & $p_{\mathrm{base}},\ \bar\delta_{\mathrm{SP}}$ &
+$P(X_S)\bar\delta_{\mathrm{SP}}$ & $P(X_S)\,\bigl|p_{\mathrm{base}}-P(h=1\mid X_S)\bigr|$\\
+FPSF & $P(X_S,y=0)$ & $p_{\mathrm{base},0},\ \bar\delta_{\mathrm{FP}}$ &
+$P(X_S,y{=}0)\bar\delta_{\mathrm{FP}}$ & $P(X_S,y{=}0)\,\bigl|p_{\mathrm{base},0}-P(h=1\mid X_S,y{=}0)\bigr|$\\
+MSD & --- & --- & $\max\bigl(P_{D_1}(X_S),P_{D_2}(X_S)\bigr)$ & $\bigl|P_{D_1}(X_S)-P_{D_2}(X_S)\bigr|$\\
+\hline
+\end{tabular}}
+\end{center}
+
+\section{Proof of validity}
+
+\begin{theorem}[Validity]\label{thm:main}
+Assume $S_A$ is finite (finitely many attributes, each with a finite domain). Let
+$(\tau,S^\star)$ be the pair returned by Algorithm~\ref{alg:main}, instantiated with any
+$(U,V)$ satisfying (B1)--(B2) — in particular any of Propositions
+\ref{prop:spsf}--\ref{prop:msd}. Then
+\[
+\tau=\max_{S\in S_A}V(S) \qquad\text{and}\qquad V(S^\star)=\tau.
+\]
+That is, the algorithm never discards a subgroup that could have improved on the true
+optimum: it is guaranteed to terminate having found a (globally) maximally violating
+subgroup, together with the correct maximal value.
+\end{theorem}
+
+\begin{proof}
+Because $S_A$ is finite, $\tau^\ast:=\max_{S\in S_A}V(S)$ exists; fix any
+$S^{\mathrm{opt}}\in\argmax_{S\in S_A}V(S)$.
+
+\smallskip
+\emph{Invariant: $\tau\le\tau^\ast$ at every point of the execution.}
+$\tau$ starts at $0\le\tau^\ast$ (as $V\ge0$) and is only ever reassigned (line~9) to a
+value $v=V(S)$ for some subgroup $S$ that was actually evaluated; every such $v$
+satisfies $v\le\tau^\ast$ by definition of $\tau^\ast$. So $\tau$ is only ever set to
+values $\le\tau^\ast$, hence remains $\le\tau^\ast$ throughout, in particular at
+termination.
+
+\smallskip
+It remains to show that the terminal $\tau$ satisfies $\tau\ge\tau^\ast$; together with
+the invariant this forces $\tau=\tau^\ast$.
+
+By Lemma~\ref{lem:tree}, $S^{\mathrm{opt}}$ has a unique generating chain
+\[
+\emptyset=S_0\prec S_1\prec\dots\prec S_m=S^{\mathrm{opt}}
+\]
+in which each $S_i$ ($i\ge1$) is placed on the Frontier at level $i$ precisely because
+$S_{i-1}=\pi(S_i)$ survived the check at line~6 when it was processed (this is how
+children are generated at lines 12--14). Two exhaustive cases:
+
+\smallskip
+\noindent\textbf{Case 1: every $S_i$, $1\le i\le m$, survives its check at line~6.}
+Then $S_m=S^{\mathrm{opt}}$ itself is processed and not pruned, so line~8 computes
+$v=V(S^{\mathrm{opt}})=\tau^\ast$ exactly. At that moment the current $\tau$ satisfies
+$\tau\le\tau^\ast=v$ (invariant), so the condition on line~9 fires and $\tau$ is raised
+to (at least) $\tau^\ast$. By the invariant this means $\tau=\tau^\ast$ from that point
+on, hence also at termination.
+
+\smallskip
+\noindent\textbf{Case 2: some $S_i$ in the chain is pruned at line~6.}
+Let $i^\ast\in\{1,\dots,m\}$ be the smallest such index, and let $\tau_{i^\ast}$ denote
+the value of $\tau$ at the moment $S_{i^\ast}$ is checked; by definition of pruning,
+\[
+U(S_{i^\ast})\le\tau_{i^\ast}.
+\]
+Since $S_{i^\ast}\preceq S_m=S^{\mathrm{opt}}$, Lemma~\ref{lem:transfer} gives
+\[
+\tau^\ast=V(S^{\mathrm{opt}})\le U(S_{i^\ast})\le\tau_{i^\ast}.
+\]
+As $\tau$ is non-decreasing throughout execution (it is only ever replaced by a larger
+value at line~9, otherwise left unchanged), $\tau_{i^\ast}\le\tau_{\mathrm{final}}$.
+Combining, $\tau^\ast\le\tau_{\mathrm{final}}$.
+
+\smallskip
+In either case $\tau_{\mathrm{final}}\ge\tau^\ast$; with the invariant this gives
+$\tau_{\mathrm{final}}=\tau^\ast$. Finally, $S^\star$ is only ever updated together
+with $\tau$ (lines~8--9), so $V(S^\star)=\tau$ holds at every point of execution and
+in particular at termination, giving $V(S^\star)=\tau_{\mathrm{final}}=\tau^\ast=
+\max_{S\in S_A}V(S)$.
+\end{proof}
+
+\begin{remark}
+Case~2 of the proof is the formal version of the claim in the problem statement: the
+moment a subgroup is pruned because its bound no longer exceeds the running best,
+\emph{the true global optimum has already been found} — it is sitting in $\tau$ at
+that very instant (the chain of inequalities $\tau^\ast\le U(S_{i^\ast})\le
+\tau_{i^\ast}\le\tau^\ast$ forces $\tau_{i^\ast}=\tau^\ast$). Pruning therefore never
+loses the optimum; it only ever stops the search from re-deriving a value it has
+already obtained by other means.
+\end{remark}
+
+\begin{corollary}[Certificate use]
+If Algorithm~\ref{alg:main} terminates with $\tau\le\gamma$ for the SPSF (resp.\ FPSF)
+instantiation, then $h$ satisfies $\gamma$-SPSF (resp.\ $\gamma$-FPSF) with respect to
+$S_A$ — \emph{no} subgroup in $S_A$, evaluated exactly, needed to be checked to know
+this.
+\end{corollary}
+
+\begin{corollary}[One algorithm, three measures]
+By Corollary~1.1 of the unifying paper, running Algorithm~\ref{alg:main} with the pair
+$(U_{\mathrm{MSD}},\mathrm{SD})$ on $(D_{h=1},D_{h=0})$ returns an $S^\star$ that also
+maximizes $\mathrm{SPSF}(h,\cdot)$ over $S_A$ (the returned \emph{values} differ by the
+$S$-independent factor $P(h=1)P(h=0)$, but the arg-max subgroup coincides); likewise,
+by $\mathrm{FPSF}(h,S)=P(y=0)\cdot\mathrm{SPSF}_{D\mid y=0}(h,S)$, running it with
+$(U_{\mathrm{FP}},\mathrm{FPSF})$ is the same search as running the SPSF instantiation
+on the sub-population $\{y=0\}$. One implementation of Algorithm~\ref{alg:main},
+parameterized by the $(U,V)$ pair in the table above, therefore suffices for all three
+notions.
+\end{corollary}
+
+\section{Remarks}
+
+\begin{itemize}
+\item \textbf{Zero-mass subgroups.} If $P(X_S)=0$ (SPSF) or $P(X_S,y=0)=0$ (FPSF),
+then $U(S)=0\le\tau$ automatically (as $\tau\ge0$ always), so such $S$ is pruned on
+its very first check — consistent with the fact that a subgroup with no support can
+have no support in any of its refinements either (Lemma~\ref{lem:cov}), so nothing of
+interest is lost.
+\item \textbf{Order within a level is irrelevant to correctness.} The proof of
+Theorem~\ref{thm:main} places no requirement on the order in which subgroups of the
+same level are processed, nor on breadth-first vs.\ depth-first traversal of the tree
+of Lemma~\ref{lem:tree}; any order yields the same final $\tau$. Processing
+high-violation subgroups earlier tends to raise $\tau$ sooner and thus prune more, but
+this affects only running time, never correctness.
+\item \textbf{Ties.} If several subgroups attain $\tau^\ast$, the argument in
+Theorem~\ref{thm:main} applies to \emph{any} of them, so the algorithm is guaranteed to
+return \emph{some} maximizer, though possibly not a specific one fixed in advance.
+\item \textbf{Where the savings come from.} For SPSF/FPSF, $U(S)$ needs only the cheap
+marginal (or joint-with-$y{=}0$) coverage of $S$, so a pruned subgroup never requires
+computing the conditional probability $P(h=1\mid X_S)$ at all — exactly the ``before
+computing the violation for each group'' savings requested. For MSD, computing
+$U_{\mathrm{MSD}}(S)$ already requires both $P_{D_1}(X_S)$ and $P_{D_2}(X_S)$, which is
+essentially all $\mathrm{SD}(S)$ needs too; there the main benefit of pruning is not
+skipping per-node work but skipping entire pruned \emph{subtrees} of exponentially many
+descendants, via Lemma~\ref{lem:transfer}.
+\item \textbf{Worst-case complexity is unaffected.} Auditing for SPSF/FPSF over
+conjunctions is NP-hard in the worst case (Theorem 3.3 of Kearns et al.\
+\cite{kearns18}), and pruning cannot repeal that; the guarantee here is soundness
+(the result is always exact when the algorithm finishes), not polynomial running time.
+In practice, however, whole branches of the exponential lattice are cut as soon as
+their bound drops below the incumbent, which is the entire empirical motivation for
+using this scheme instead of naive enumeration.
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{msd} Maximum Subgroup Discrepancy (MSD): $\mathrm{MSD}(\mu,\nu;P)=\sup_{S\in
+S_P}|\mu(\chi_S)-\nu(\chi_S)|$, together with its sample-complexity and MIO
+formulation.
+\bibitem{kearns18} Statistical Parity (SP) and False Positive (FP) Subgroup Fairness,
+and the auditing-hardness result (Theorem 3.3).
+\bibitem{unify} Unification of SPSF and MSD for detecting the most unfair subgroup
+(Definition of Subgroup Discrepancy, Theorem 1, Corollary 1.1, and Eq.~(1) relating
+FPSF to SPSF on the negative class).
+\end{thebibliography}
+
+\end{document}

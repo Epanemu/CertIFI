@@ -1,27 +1,32 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
 .ipynb_checkpoints/
+.venv/
+
+# Rust / maturin build
+/target
+/dist
+*.so
+*.pyd
 
 # Data downloaded by folktables
 data/
 
-# Hydra / experiment outputs
+# Local working material (paper experiments, results); see tag neurips2026
 outputs/
 multirun/
 batch_out/
 batch_from_cluster/
 plots/
-*.png
-*.pdf
-
-# Local working material not part of the release
 NeurIPS_rebuttal/
 bias_analysis/
-.claude/
-paper.pdf
-
-# Legacy / superseded scripts
+maxviol/
+maxviol_package_1.zip
+bias_detect_maxviol.py
+experiment_eval_maxviol.py
 bias_detect_cluster.py
 msd.py
 spsf_mio.py
@@ -31,3 +36,7 @@ eval_plot.py
 train_plot.py
 plot_gap.py
 parse_eval.py
+.claude/
+paper.pdf
+*.png
+*.pdf

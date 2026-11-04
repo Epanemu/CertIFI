@@ -1,8 +1,0 @@
-# Optional SLURM launcher (requires hydra-submitit-launcher).
-# Use with: python experiment_train.py -m hydra/launcher=slurm hydra.launcher.partition=<your partition> ...
-defaults:
-  - submitit_slurm
-
-mem_per_cpu: 4G
-cpus_per_task: 16
-timeout_min: 1440   # increase to cover time_limit plus the post-training evaluation
